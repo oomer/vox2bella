@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="PseudoDebug|x64">
+      <Configuration>PseudoDebug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{84cf8081-b10a-4742-9542-c95ca62b9589}</ProjectGuid>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='PseudoDebug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='PseudoDebug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='PseudoDebug|x64'">
+    <ClCompile>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>PSEUDODEBUG;_CONSOLE;DL_USE_SHARED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Optimization>Disabled</Optimization>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <AdditionalIncludeDirectories>..\bella_engine_sdk\src</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>bella_scene_sdk.lib;Shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;DL_USE_SHARED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>src</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>bella_scene_sdk.lib;Shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="$(PlatformToolset.Contains('Intel'))">
+    <ClCompile>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <PreprocessorDefinitions>_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <InterproceduralOptimization>NoIPO</InterproceduralOptimization>
+    </ClCompile>
+    <Link>
+      <InterproceduralOptimization>false</InterproceduralOptimization>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup>
+    <PostBuildEvent>
+      <Command>copy "$(ProjectDir)lib\*.dll" "$(TargetDir)"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\bella_scene_sdk\src\bella_sdk\api.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\bella_sdk\bella_nodeapi.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\bella_sdk\bella_scene.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\bella_sdk\bella_sceneapi.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\bella_sdk\bella_types.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\api.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_args.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_array.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_compress.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_defines.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_file.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_fs.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_hash.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_hashmap.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_hw.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_licensing.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_logging.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_main.inl" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_math.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_nullable.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_os.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_path.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_pcgrng.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_platform.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_references.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_refvector.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_string.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_stringio.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_time.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_topomap.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_types.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_vector.h" />
+    <ClInclude Include="..\bella_scene_sdk\src\dl_core\dl_version.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="vox2bella.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="doc\bella_sdk.md.html" />
+    <None Include="doc\thirdparty.md" />
+    <None Include="makefile" />
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="..\bella_scene_sdk\lib\bella_scene_sdk.lib" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="license.txt" />
+    <Text Include="version.txt" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
