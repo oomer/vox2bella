@@ -14,12 +14,13 @@
 // Bella SDK includes - external libraries for 3D rendering
 #include "bella_sdk/bella_scene.h"  // For creating and manipulating 3D scenes in Bella
 #include "dl_core/dl_main.inl"      // Core functionality from the Diffuse Logic engine
+#include "dl_core/dl_fs.h"
 
 // Namespaces allow you to use symbols from a library without prefixing them
 // For example, with these 'using' statements, you can write 'Scene' instead of 'bella_sdk::Scene'
-using namespace dl;
-using namespace bella_sdk;
-
+//using namespace dl;
+//using namespace dl::bella_sdk;
+namespace bsdk = dl::bella_sdk;
 /*
 VOX File Format Structure Explanation:
 
@@ -181,8 +182,8 @@ unsigned int palette[256] = {
 void readChunk( std::ifstream& file, 
                 unsigned int (&palette)[256],
                 std::vector<uint8_t> (&voxelPalette),
-                Scene sceneWrite,
-                Node voxel
+                bsdk::Scene sceneWrite,
+                bsdk::Node voxel
               ) 
 {
     // Read the chunk header from the file
@@ -246,7 +247,7 @@ void readChunk( std::ifstream& file,
             uint8_t colorIndex = content[4 + (i * 4) + 3]; 
             
             // Create a unique name for this voxel's transform node
-            String voxXformName = String("voxXform") + String(i);
+            dl::String voxXformName = dl::String("voxXform") + dl::String(i);
             // Create a transform node in the Bella scene
             auto xform = sceneWrite.createNode("xform", voxXformName, voxXformName);
             // Set this transform's parent to the world root
@@ -255,7 +256,7 @@ void readChunk( std::ifstream& file,
             voxel.parentTo(xform);
             // Set the transform matrix to position the voxel at (x,y,z)
             // This is a 4x4 transformation matrix - standard in 3D graphics
-            xform["steps"][0]["xform"] = Mat4 { 1, 0, 0, 0, 
+            xform["steps"][0]["xform"] = dl::Mat4 { 1, 0, 0, 0, 
                                                 0, 1, 0, 0, 
                                                 0, 0, 1, 0, 
                                                 static_cast<double>(x*1), 
@@ -421,55 +422,55 @@ void readChunk( std::ifstream& file,
 // Observer class for monitoring scene events
 // This is a custom implementation of the SceneObserver interface from Bella SDK
 // The SceneObserver is called when various events occur in the scene
-struct Observer : public SceneObserver
+struct Observer : public bsdk::SceneObserver
 {   
     bool inEventGroup = false; // Flag to track if we're in an event group
         
     // Override methods from SceneObserver to provide custom behavior
     
     // Called when a node is added to the scene
-    void onNodeAdded( Node node ) override
+    void onNodeAdded( bsdk::Node node ) override
     {   
-        logInfo("%sNode added: %s", inEventGroup ? "  " : "", node.name().buf());
+        dl::logInfo("%sNode added: %s", inEventGroup ? "  " : "", node.name().buf());
     }
     
     // Called when a node is removed from the scene
-    void onNodeRemoved( Node node ) override
+    void onNodeRemoved( bsdk::Node node ) override
     {
-        logInfo("%sNode removed: %s", inEventGroup ? "  " : "", node.name().buf());
+        dl::logInfo("%sNode removed: %s", inEventGroup ? "  " : "", node.name().buf());
     }
     
     // Called when an input value changes
-    void onInputChanged( Input input ) override
+    void onInputChanged( bsdk::Input input ) override
     {
-        logInfo("%sInput changed: %s", inEventGroup ? "  " : "", input.path().buf());
+        dl::logInfo("%sInput changed: %s", inEventGroup ? "  " : "", input.path().buf());
     }
     
     // Called when an input is connected to something
-    void onInputConnected( Input input ) override
+    void onInputConnected( bsdk::Input input ) override
     {
-        logInfo("%sInput connected: %s", inEventGroup ? "  " : "", input.path().buf());
+        dl::logInfo("%sInput connected: %s", inEventGroup ? "  " : "", input.path().buf());
     }
     
     // Called at the start of a group of related events
     void onBeginEventGroup() override
     {
         inEventGroup = true;
-        logInfo("Event group begin.");
+        dl::logInfo("Event group begin.");
     }
     
     // Called at the end of a group of related events
     void onEndEventGroup() override
     {
         inEventGroup = false;
-        logInfo("Event group end.");
+        dl::logInfo("Event group end.");
     }
 };
 
 // Main function for the program
 // This is where execution begins
 // The Args object contains command-line arguments
-int DL_main(Args& args)
+int DL_main(dl::Args& args)
 {
     // Variable to store the input file path
     std::string filePath;
@@ -484,14 +485,14 @@ int DL_main(Args& args)
     // If --version was requested, print version and exit
     if (args.versionReqested())
     {
-        printf("%s", bellaSdkVersion().toString().buf());
+        printf("%s", dl::bellaSdkVersion().toString().buf());
         return 0;
     }
 
     // If --help was requested, print help and exit
     if (args.helpRequested())
     {
-        printf("%s", args.help("vox2bella", fs::exePath(), "Hello\n").buf());
+        printf("%s", args.help("vox2bella", dl::fs::exePath(), "Hello\n").buf());
         return 0;
     }
     
@@ -542,7 +543,7 @@ int DL_main(Args& args)
     }
 
     // Create a new Bella scene
-    Scene sceneWrite;
+    bsdk::Scene sceneWrite;
     sceneWrite.loadDefs(); // Load scene definitions
     
     // Create a vector to store voxel color indices
@@ -605,19 +606,19 @@ int DL_main(Args& args)
     // Set up the scene with an EventScope 
     // EventScope groups multiple changes together for efficiency
     {
-        Scene::EventScope es(sceneWrite);
+        bsdk::Scene::EventScope es(sceneWrite);
         auto settings = sceneWrite.settings(); // Get scene settings
         auto world = sceneWrite.world();       // Get scene world root
         
         // Configure camera
-        camera["resolution"]    = Vec2 {1920, 1080};  // Set resolution to 1080p
+        camera["resolution"]    = dl::Vec2 {1920, 1080};  // Set resolution to 1080p
         camera["lens"]          = lens;               // Connect camera to lens
         camera["sensor"]        = sensor;             // Connect camera to sensor
         camera.parentTo(cameraXform);                 // Parent camera to its transform
         cameraXform.parentTo(world);                  // Parent camera transform to world
         
         // Position the camera with a transformation matrix
-        cameraXform["steps"][0]["xform"] = Mat4 {0.525768608156, -0.850627633385, 0, 0, -0.234464751651, -0.144921468924, -0.961261695938, 0, 0.817675761479, 0.505401223947, -0.275637355817, 0, -88.12259018466, -54.468125200218, 50.706001690932, 1};
+        cameraXform["steps"][0]["xform"] = dl::Mat4 {0.525768608156, -0.850627633385, 0, 0, -0.234464751651, -0.144921468924, -0.961261695938, 0, 0.817675761479, 0.505401223947, -0.275637355817, 0, -88.12259018466, -54.468125200218, 50.706001690932, 1};
         
         // Configure environment (image-based lighting)
         imageDome["ext"]            = ".jpg";
@@ -649,7 +650,7 @@ int DL_main(Args& args)
         settings["camera"]      = camera;
         settings["environment"] = imageDome;
         settings["iprScale"]    = 100.0f;
-        settings["threads"]     = Input(0);  // Auto-detect thread count
+        settings["threads"]     = bsdk::Input(0);  // Auto-detect thread count
         settings["groundPlane"] = groundPlane;
         settings["iprNavigation"] = "maya";  // Use Maya-like navigation in viewer
         //settings["sun"] = sun;
@@ -674,18 +675,18 @@ int DL_main(Args& args)
             uint8_t a = (palette[i] >> 24) & 0xFF;  // Alpha (highest byte)
             
             // Create a unique material name
-            String nodeName = String("voxMat") + String(i);
+            dl::String nodeName = dl::String("voxMat") + dl::String(i);
             // Create an Oren-Nayar material (diffuse material model)
             auto voxMat = sceneWrite.createNode("orenNayar", nodeName, nodeName);
             {
-                Scene::EventScope es(sceneWrite);
+                bsdk::Scene::EventScope es(sceneWrite);
                 // Commented out: Alternative material settings
                 //dielectric["ior"] = 1.41f;
                 //dielectric["roughness"] = 40.0f;
                 //dielectric["depth"] = 33.0f;
                 
                 // Set the material color (convert 0-255 values to 0.0-1.0 range)
-                voxMat["reflectance"] = Rgba{ static_cast<double>(r)/255.0,
+                voxMat["reflectance"] = dl::Rgba{ static_cast<double>(r)/255.0,
                                               static_cast<double>(g)/255.0,
                                               static_cast<double>(b)/255.0,
                                               static_cast<double>(a)/255.0};
@@ -709,9 +710,9 @@ int DL_main(Args& args)
     for (int i = 0; i < voxelPalette.size(); i++) 
     {
         // Find the transform node for this voxel
-        auto xformNode = sceneWrite.findNode(String("voxXform") + String(i));
+        auto xformNode = sceneWrite.findNode(dl::String("voxXform") + dl::String(i));
         // Find the material node for this voxel's color
-        auto matNode = sceneWrite.findNode(String("voxMat") + String(voxelPalette[i]));
+        auto matNode = sceneWrite.findNode(dl::String("voxMat") + dl::String(voxelPalette[i]));
         // Assign the material to the voxel
         xformNode["material"] = matNode;
     }
@@ -721,8 +722,8 @@ int DL_main(Args& args)
 
     // Create the output file path by replacing .vox with .bsz
     std::filesystem::path bszPath = voxPath.stem().string() + ".bsz";
-    // Write the Bella scene to the output file
-    sceneWrite.write(String(bszPath.string().c_str()));
+    // Write the Bella cene to the output file
+    sceneWrite.write(dl::String(bszPath.string().c_str()));
 
     // Return success
     return 0;
