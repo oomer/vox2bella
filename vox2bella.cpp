@@ -11,6 +11,10 @@
 #include <cmath>        // For mathematical functions (sqrt)
 #include <map>          // For key-value pair data structures (maps)
 #include <filesystem>   // For file system operations (directory handling, path manipulation)
+#include <thread>       // For std::this_thread::sleep_for
+#include <chrono>       // For std::chrono::milliseconds
+#include <cstdlib>      // For system() calls
+#include <cstdio>       // For snprintf function
 
 // Bella SDK includes - external libraries for 3D rendering
 #include "../bella_engine_sdk/src/bella_sdk/bella_engine.h" // For rendering and scene creation in Bella
@@ -25,7 +29,7 @@
 #include "../oom/oom_bella_long.h"    // more oomer's helper code for bella, but has long data
 #include "../oom/oom_bella_premade.h" // oomer's helper code for bella scenes
 #include "../oom/oom_bella_misc.h"    // oomer's hlper code for bella misc code
-
+#include "../oom/oom_bella_engine.h"  // oomer's helper code for bella rendering
 
 
 /*
@@ -216,6 +220,13 @@ void readChunk( std::ifstream& file,
 
         // Process each voxel
         // The voxel data is stored as a sequence of (x,y,z,colorIndex) values
+        auto groupxform = belScene.createNode("xform", "group", "group");
+        groupxform.parentTo(belScene.world());
+        dl::Mat4 xformMatrix1 = dl::Mat4 { 0, -1, 0, 0, 
+                                          1, 0, 0, 0, 
+                                          0, 0, 1, 0, 
+                                          0, 0, 0, 1};
+        groupxform["steps"][0]["xform"] = xformMatrix1;
         for (uint32_t i = 0; i < numVoxels; ++i) {
             
             // Read voxel position (x,y,z) and color index
@@ -247,6 +258,7 @@ void readChunk( std::ifstream& file,
             // Create a transform node in the Bella scene
             auto xform = belScene.createNode("xform", voxXformName, voxXformName);
             // Set this transform's parent to the world root
+            //xform.parentTo(groupxform);
             xform.parentTo(belScene.world());
             // Parent the voxel geometry to this transform
             voxel.parentTo(xform);
@@ -425,6 +437,8 @@ int DL_main(dl::Args& args)
     args.add("vi",  "voxin", "",   "Input .vox file");
     args.add("tp",  "thirdparty",   "",   "prints third party licenses");
     args.add("li",  "licenseinfo",   "",   "prints license info");
+    args.add("r",   "render",        "",   "render the scene");
+    args.add("o",   "orbit",         "36",   "orbit the camera around the scene (number of frames, default: 36)");
 
     // Handle special command-line requests
     
@@ -485,9 +499,20 @@ int DL_main(dl::Args& args)
     }
 
     // Create a new Bella scene
-    dl::bella_sdk::Scene belScene;
-    belScene.loadDefs(); // Load scene definitions
-    
+    //dl::bella_sdk::Scene belScene;
+    //belScene.loadDefs(); // Load scene definitions
+
+    // Create a Bella Engine instance and load the default scene definitions ( all the nodes )
+    dl::bella_sdk::Engine engine;
+    engine.scene().loadDefs();
+
+    // Create an engine observer that we subscribe to catch Engine event callbacks
+    oom::bella::MyEngineObserver engineObserver;
+    engine.subscribe(&engineObserver);    
+
+    auto belScene = engine.scene();
+
+
     // Create a vector to store voxel color indices
     std::vector<uint8_t> voxelPalette;
     
@@ -514,78 +539,19 @@ int DL_main(dl::Args& args)
     }
     
     oom::bella::defaultScene2025(belScene); // create the basic scene elements in Bella
-
     auto voxel          = belScene.createNode("box","box1","box1");
-
-    // Configure voxel box dimensions
     voxel["radius"]           = 0.33f;
     voxel["sizeX"]            = 0.99f;
     voxel["sizeY"]            = 0.99f;
     voxel["sizeZ"]            = 0.99f;
-
-
-
-    // Create the basic scene elements in Bella
-    // Each line creates a different type of node in the scene
-    /*
-    auto beautyPass     = belScene.createNode("beautyPass","beautyPass1","beautyPass1");
-    auto cameraXform    = belScene.createNode("xform","cameraXform1","cameraXform1");
-    auto camera         = belScene.createNode("camera","camera1","camera1");
-    auto sensor         = belScene.createNode("sensor","sensor1","sensor1");
-    auto lens           = belScene.createNode("thinLens","thinLens1","thinLens1");
-    auto imageDome      = belScene.createNode("imageDome","imageDome1","imageDome1");
-    auto groundPlane    = belScene.createNode("groundPlane","groundPlane1","groundPlane1");
-    auto voxel          = belScene.createNode("box","box1","box1");
-    auto groundMat      = belScene.createNode("quickMaterial","groundMat1","groundMat1");
-    auto sun            = belScene.createNode("sun","sun1","sun1");
-    */
-    // Set up the scene with an EventScope 
-    // EventScope groups multiple changes together for efficiency
-    {
-        dl::bella_sdk::Scene::EventScope es(belScene);
-        /*auto settings = belScene.settings(); // Get scene settings
-        auto world = belScene.world();       // Get scene world root
-        
-        // Configure camera
-        //camera["resolution"]    = dl::Vec2 {400, 400};  // Set resolution to 1080p
-        camera["lens"]          = lens;               // Connect camera to lens
-        camera["sensor"]        = sensor;             // Connect camera to sensor
-        camera.parentTo(cameraXform);                 // Parent camera to its transform
-        cameraXform.parentTo(world);                  // Parent camera transform to world
-        
-        // Camera position will be calculated after processing voxels using zoomExtents
-        
-        // Configure environment (image-based lighting)
-        imageDome["ext"]            = ".jpg";
-        imageDome["dir"]            = "./resources";
-        imageDome["multiplier"]     = 6.0f;
-        imageDome["file"]           = "DayEnvironmentHDRI019_1K-TONEMAPPED";
-
-        // Configure ground plane
-        groundPlane["elevation"]    = -.5f;
-        groundPlane["material"]     = groundMat;
-        
-        // Configure materials
-        groundMat["type"] = "metal";
-        groundMat["roughness"] = 22.0f;
-        
-        // Configure voxel box dimensions
-        voxel["radius"]           = 0.33f;
-        voxel["sizeX"]            = 0.99f;
-        voxel["sizeY"]            = 0.99f;
-        voxel["sizeZ"]            = 0.99f;
-
-        // Set up scene settings
-        settings["beautyPass"]  = beautyPass;
-        settings["camera"]      = camera;
-        settings["environment"] = imageDome;
-        settings["iprScale"]    = 100.0f;
-        settings["threads"]     = dl::bella_sdk::Input(0);  // Auto-detect thread count
-        settings["groundPlane"] = groundPlane;
-        settings["iprNavigation"] = "maya";  // Use Maya-like navigation in viewer
-        //settings["sun"] = sun; */
-    }
-
+    
+    belScene.beautyPass()["outputExt"] = ".jpg";
+    belScene.beautyPass()["outputName"] = voxPath.stem().string().c_str();
+    auto imgOutputPath = belScene.createNode("outputImagePath", "voxOutputPath");
+    imgOutputPath["ext"] = ".jpg";
+    imgOutputPath["dir"] = ".";
+    belScene.beautyPass()["saveImage"] = dl::Int(0);
+    belScene.beautyPass()["overridePath"] = imgOutputPath;
     // Process all chunks in the VOX file
     // Loop until we reach the end of the file
     while (file.peek() != EOF) {
@@ -610,10 +576,6 @@ int DL_main(dl::Args& args)
             auto voxMat = belScene.createNode("orenNayar", nodeName, nodeName);
             {
                 dl::bella_sdk::Scene::EventScope es(belScene);
-                // Commented out: Alternative material settings
-                //dielectric["ior"] = 1.41f;
-                //dielectric["roughness"] = 40.0f;
-                //dielectric["depth"] = 33.0f;
                 
                 // Set the material color (convert 0-255 values to 0.0-1.0 range)
                 voxMat["reflectance"] = dl::Rgba{ static_cast<double>(r)/255.0,
@@ -675,6 +637,80 @@ int DL_main(dl::Args& args)
     // Create the output file path by replacing .vox with .bsz
     std::filesystem::path bszPath = voxPath.stem().string() + ".bsz";
     // Write the Bella scene to the output file
+
+    auto offset1 = dl::Vec2 {-90, 0.0};
+    dl::bella_sdk::orbitCamera(engine.scene().cameraPath(),offset1);
+
+
+    // Render the scene
+    if (args.have("--render")) {
+        engine.start();
+        while(engine.rendering()) { 
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        } 
+    } 
+
+    // orbit camera around plot points
+    if (args.have("--orbit")) {
+        int numFrames = 36; // default value
+        std::string orbitValue = args.value("--orbit").buf();
+        if (!orbitValue.empty()) {
+            try {
+                numFrames = std::stoi(orbitValue);
+            } catch (const std::invalid_argument& e) {
+                std::cerr << "Error: Invalid number for orbit frames: " << orbitValue << std::endl;
+                return 1;
+            }
+        }
+
+        auto belCamera = belScene.camera();
+        belCamera["resolution"] = dl::Vec2{320, 320};
+        
+        std::cout << "🎬 Starting orbit animation with " << numFrames << " frames..." << std::endl;
+        
+        for (int i = 0; i < numFrames; i++) {
+            std::cout << "📹 Rendering frame " << (i + 1) << "/" << numFrames << std::endl;
+            
+            auto offset = dl::Vec2 {i*0.05, 0.0};
+            dl::bella_sdk::orbitCamera(engine.scene().cameraPath(),offset);
+            auto belBeautyPass = belScene.beautyPass();
+            belBeautyPass["outputName"] = dl::String::format("frame_%04d", i);
+            
+            engine.start();
+            while(engine.rendering()) { 
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            }
+            
+            std::cout << "✅ Frame " << (i + 1) << " completed" << std::endl;
+        }
+        
+        std::cout << "🎬 All frames rendered, creating MP4 with ffmpeg..." << std::endl;
+        
+        // Create MP4 using ffmpeg (following example.cpp pattern)
+        std::string voxFileName = std::filesystem::path(filePath).stem().string();
+        std::string mp4File = voxFileName + "_orbit.mp4";
+        std::string ffmpegCmd = "ffmpeg -y -loglevel error -framerate 30 -i frame_%04d.jpg -c:v libx264 -pix_fmt yuv420p " + mp4File;
+        
+        std::cout << "Executing FFmpeg command: " << ffmpegCmd << std::endl;
+        int result = system(ffmpegCmd.c_str());
+        
+        if (result == 0) {
+            std::cout << "✅ MP4 conversion successful: " << mp4File << std::endl;
+            
+            // Clean up individual frame files (following example.cpp pattern)
+            for (int i = 0; i < numFrames; i++) {
+                char frame_file[32];
+                snprintf(frame_file, sizeof(frame_file), "frame_%04d.jpg", i);
+                std::remove(frame_file);
+            }
+            std::cout << "🧹 Cleaned up individual frame files" << std::endl;
+            
+        } else {
+            std::cout << "❌ FFmpeg conversion failed with error code: " << result << std::endl;
+        }
+    } 
+
+
     belScene.write(dl::String(bszPath.string().c_str()));
 
     // Return success
