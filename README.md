@@ -23,6 +23,19 @@ cd vox2bella
 make
 ```
 
+### Mac
+```
+mkdir workdir
+cd workdir
+curl -LO https://downloads.bellarender.com/bella_engine_sdk-25.3.0-macos.zip
+unzip bella_engine_sdk-25.3.0-macos.zip
+git clone https://git.indoodle.com/oomer/oom.git
+git clone https://github.com/oomer/vox2bella.git
+cd vox2bella
+make all -j4
+```
+
+
 ### Windows
 - Install Visual Studio Community 2022
 - Add Desktop development with C++ workload

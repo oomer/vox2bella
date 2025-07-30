@@ -8,19 +8,26 @@
 #include <fstream>      // For file operations (reading/writing files)
 #include <vector>       // For dynamic arrays (vectors)
 #include <cstdint>      // For fixed-size integer types (uint8_t, uint32_t, etc.)
+#include <cmath>        // For mathematical functions (sqrt)
 #include <map>          // For key-value pair data structures (maps)
 #include <filesystem>   // For file system operations (directory handling, path manipulation)
 
 // Bella SDK includes - external libraries for 3D rendering
-#include "bella_sdk/bella_scene.h"  // For creating and manipulating 3D scenes in Bella
-#include "dl_core/dl_main.inl"      // Core functionality from the Diffuse Logic engine
-#include "dl_core/dl_fs.h"
+#include "../bella_engine_sdk/src/bella_sdk/bella_engine.h" // For rendering and scene creation in Bella
+#include "../bella_engine_sdk/src/dl_core/dl_main.inl" // Core functionality from the Diffuse Logic engine
 
-// Namespaces allow you to use symbols from a library without prefixing them
-// For example, with these 'using' statements, you can write 'Scene' instead of 'bella_sdk::Scene'
-//using namespace dl;
-//using namespace dl::bella_sdk;
-namespace bsdk = dl::bella_sdk;
+// oomer's helper utility code to make main cpp smaller
+#include "../oom/oom_bella_long.h"   
+#include "../oom/oom_misc.h"         // common misc code
+#include "../oom/oom_license.h"         // common misc code
+//#include "../oom/oom_voxel_vmax.h"   // common vmax voxel code and structures
+//#include "../oom/oom_voxel_ogt.h"    // common opengametools voxel conversion wrappers
+#include "../oom/oom_bella_long.h"    // more oomer's helper code for bella, but has long data
+#include "../oom/oom_bella_premade.h" // oomer's helper code for bella scenes
+#include "../oom/oom_bella_misc.h"    // oomer's hlper code for bella misc code
+
+
+
 /*
 VOX File Format Structure Explanation:
 
@@ -117,32 +124,6 @@ void printMaterialProperties(const Material& matl) {
     {
         std::cout << "_flux: " << std::get<float>(matl.properties.at("_flux")) << std::endl;
     }
-
-    // Commented out properties - these were disabled in the original code
-    /*if (matl.properties.count("_plastic") > 0 )
-    {
-        std::cout << "_plastic: " <<  std::endl;
-    }*/
-
-    /*if (matl.properties.count("_diffuse") > 0 )
-    {
-        std::cout << "_diffuse: " << std::endl;
-    }
-
-    if (matl.properties.count("_metal") > 0 )
-    {
-        std::cout << "_metal: " << std::endl;
-    }
-
-    if (matl.properties.count("_glass") > 0 )
-    {
-        std::cout << "_glass: " << std::endl;
-    }
-
-    if (matl.properties.count("_emit") > 0 )
-    {
-        std::cout << "_emit: " << std::endl;
-    }*/
 }
 
 // Default color palette used if a .vox file doesn't provide its own
@@ -182,8 +163,11 @@ unsigned int palette[256] = {
 void readChunk( std::ifstream& file, 
                 unsigned int (&palette)[256],
                 std::vector<uint8_t> (&voxelPalette),
-                bsdk::Scene sceneWrite,
-                bsdk::Node voxel
+                dl::bella_sdk::Scene belScene,
+                dl::bella_sdk::Node voxel,
+                uint8_t& minX, uint8_t& minY, uint8_t& minZ,
+                uint8_t& maxX, uint8_t& maxY, uint8_t& maxZ,
+                bool& hasVoxels
               ) 
 {
     // Read the chunk header from the file
@@ -233,25 +217,37 @@ void readChunk( std::ifstream& file,
         // Process each voxel
         // The voxel data is stored as a sequence of (x,y,z,colorIndex) values
         for (uint32_t i = 0; i < numVoxels; ++i) {
-            // Commented out alternative approach
-            /*uint32_t x = static_cast<uint32_t>(content[4 + (i * 4) + 0]);
-            uint32_t y = static_cast<uint32_t>(content[4 + (i * 4) + 1]);
-            uint32_t z = static_cast<uint32_t>(content[4 + (i * 4) + 2]);
-            uint8_t colorIndex = content[4 + (i * 4) + 3];*/
             
             // Read voxel position (x,y,z) and color index
             // +4 offset is because the first 4 bytes contain numVoxels
             uint8_t x = content[4 + (i * 4) + 0];
             uint8_t y = content[4 + (i * 4) + 1];
             uint8_t z = content[4 + (i * 4) + 2];
-            uint8_t colorIndex = content[4 + (i * 4) + 3]; 
+            uint8_t colorIndex = content[4 + (i * 4) + 3];
+            
+            // Update extents for camera positioning
+            if (!hasVoxels) {
+                // First voxel - initialize min/max
+                minX = maxX = x;
+                minY = maxY = y;
+                minZ = maxZ = z;
+                hasVoxels = true;
+            } else {
+                // Update min/max values
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+                if (z < minZ) minZ = z;
+                if (z > maxZ) maxZ = z;
+            } 
             
             // Create a unique name for this voxel's transform node
             dl::String voxXformName = dl::String("voxXform") + dl::String(i);
             // Create a transform node in the Bella scene
-            auto xform = sceneWrite.createNode("xform", voxXformName, voxXformName);
+            auto xform = belScene.createNode("xform", voxXformName, voxXformName);
             // Set this transform's parent to the world root
-            xform.parentTo(sceneWrite.world());
+            xform.parentTo(belScene.world());
             // Parent the voxel geometry to this transform
             voxel.parentTo(xform);
             // Set the transform matrix to position the voxel at (x,y,z)
@@ -265,36 +261,6 @@ void readChunk( std::ifstream& file,
             // Store the color index for this voxel
             voxelPalette.push_back(colorIndex);
         }
-
-    /* Commented out RGBA chunk handling - would process color palette data
-    } else if (chunkId == "RGBA") 
-    {
-        has_palette=true;
-        for (int i = 0; i < 256; ++i) {
-            palette[i] = *reinterpret_cast<uint32_t*>(content.data() + (i * 4));
-            uint8_t r = (palette[i] >> 0) & 0xFF;
-            uint8_t g = (palette[i] >> 8) & 0xFF;
-            uint8_t b = (palette[i] >> 16) & 0xFF;
-            uint8_t a = (palette[i] >> 24) & 0xFF;
-
-            String nodeName = String("voxMat") + String(i); // Create the node name
-            auto dielectric = sceneWrite.createNode("dielectric",nodeName,nodeName);
-            {
-                Scene::EventScope es(sceneWrite);
-                dielectric["ior"] = 1.41f;
-                dielectric["roughness"] = 40.0f;
-                dielectric["depth"] = 33.0f;
-                dielectric["transmittance"] = Rgba{ static_cast<double>(r)/255.0,
-                                                    static_cast<double>(g)/255.0,
-                                                    static_cast<double>(b)/255.0,
-                                                    static_cast<double>(a)/255.0};
-            }
-
-            std::cout << "Color " << i << ": R=" << static_cast<int>(r)
-                    << ", G=" << static_cast<int>(g)
-                    << ", B=" << static_cast<int>(b)
-                    << ", A=" << static_cast<int>(a) << std::endl; 
-        }*/
     } 
     // Basic recognition of other chunk types - just printing their names
     else if (chunkId == "rCAM")
@@ -337,16 +303,6 @@ void readChunk( std::ifstream& file,
         //std::cout << "junk:" << junk << std::endl;
         offset += 4;
 
-        /* Commented out hex dump debugging code
-        std::cout << "MATL Chunk Hex Dump:" << std::endl;
-        for (size_t i = 0; i < content.size(); ++i) {
-            std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(content[i]) << " ";
-            if ((i + 1) % 16 == 0) {
-                std::cout << std::endl;
-            }
-        }
-        std::cout << std::dec << std::endl;*/
-
         // Parse material properties
         // The material data format is a series of key-value pairs:
         // [key length][key string][value length][value string]
@@ -372,21 +328,7 @@ void readChunk( std::ifstream& file,
             
             // Store the property as a string
             material.properties[key] = valueStr;
-
-            /* Commented out: Code to convert string values to floats for certain properties
-            if(key=="_rough" || key=="_weight" || key=="_spec" || key=="_ior" || key=="_att" || key=="_flux") {
-                try{
-                    float valueFloat = std::stof(valueStr);
-                    material.properties[key] = valueFloat;
-                } catch (const std::invalid_argument& e){
-                    std::cerr << "Error converting _rough to float: " << e.what() << std::endl;
-                }
-            } else {
-                material.properties[key] = valueStr; // Store other values as strings
-            }*/
         }
-
-        //printMaterialProperties(material);
     } 
     // More chunk types that are identified but not fully processed
     else if (chunkId == "MATT")
@@ -415,39 +357,39 @@ void readChunk( std::ifstream& file,
     // Read child chunks until we reach the end of the children section
     while(file.tellg() < childrenEnd){
         // Recursively call readChunk to process each child chunk
-        readChunk(file, palette, voxelPalette, sceneWrite, voxel);
+        readChunk(file, palette, voxelPalette, belScene, voxel, minX, minY, minZ, maxX, maxY, maxZ, hasVoxels);
     }
 }
 
 // Observer class for monitoring scene events
 // This is a custom implementation of the SceneObserver interface from Bella SDK
 // The SceneObserver is called when various events occur in the scene
-struct Observer : public bsdk::SceneObserver
+struct Observer : public dl::bella_sdk::SceneObserver
 {   
     bool inEventGroup = false; // Flag to track if we're in an event group
         
     // Override methods from SceneObserver to provide custom behavior
     
     // Called when a node is added to the scene
-    void onNodeAdded( bsdk::Node node ) override
+    void onNodeAdded( dl::bella_sdk::Node node ) override
     {   
         dl::logInfo("%sNode added: %s", inEventGroup ? "  " : "", node.name().buf());
     }
     
     // Called when a node is removed from the scene
-    void onNodeRemoved( bsdk::Node node ) override
+    void onNodeRemoved( dl::bella_sdk::Node node ) override
     {
         dl::logInfo("%sNode removed: %s", inEventGroup ? "  " : "", node.name().buf());
     }
     
     // Called when an input value changes
-    void onInputChanged( bsdk::Input input ) override
+    void onInputChanged( dl::bella_sdk::Input input ) override
     {
         dl::logInfo("%sInput changed: %s", inEventGroup ? "  " : "", input.path().buf());
     }
     
     // Called when an input is connected to something
-    void onInputConnected( bsdk::Input input ) override
+    void onInputConnected( dl::bella_sdk::Input input ) override
     {
         dl::logInfo("%sInput connected: %s", inEventGroup ? "  " : "", input.path().buf());
     }
@@ -472,6 +414,10 @@ struct Observer : public bsdk::SceneObserver
 // The Args object contains command-line arguments
 int DL_main(dl::Args& args)
 {
+    int s_oomBellaLogContext = 0; 
+    dl::subscribeLog(&s_oomBellaLogContext, oom::bella::log);
+    dl::flushStartupMessages(); 
+ 
     // Variable to store the input file path
     std::string filePath;
 
@@ -489,24 +435,20 @@ int DL_main(dl::Args& args)
         return 0;
     }
 
-    // If --help was requested, print help and exit
-    if (args.helpRequested())
-    {
-        printf("%s", args.help("vox2bella", dl::fs::exePath(), "Hello\n").buf());
+    if (args.helpRequested()) {
+        std::cout << args.help("vmax2bella © 2025 Harvey Fong","vmax2bella", "1.0") << std::endl;
         return 0;
     }
     
-    // If --licenseinfo was requested, print license info and exit
     if (args.have("--licenseinfo"))
     {
-        std::cout << initializeGlobalLicense() << std::endl;
+        std::cout << oom::license::printLicense() << std::endl;
         return 0;
     }
  
-    // If --thirdparty was requested, print third-party licenses and exit
     if (args.have("--thirdparty"))
     {
-        std::cout << initializeGlobalThirdPartyLicences() << std::endl;
+        std::cout << oom::license::printBellaSDK() << "\n====\n" << std::endl;
         return 0;
     }
 
@@ -543,11 +485,16 @@ int DL_main(dl::Args& args)
     }
 
     // Create a new Bella scene
-    bsdk::Scene sceneWrite;
-    sceneWrite.loadDefs(); // Load scene definitions
+    dl::bella_sdk::Scene belScene;
+    belScene.loadDefs(); // Load scene definitions
     
     // Create a vector to store voxel color indices
     std::vector<uint8_t> voxelPalette;
+    
+    // Variables to track voxel extents for camera positioning
+    uint8_t minX = 255, minY = 255, minZ = 255;
+    uint8_t maxX = 0, maxY = 0, maxZ = 0;
+    bool hasVoxels = false;
 
     // Open the input file for binary reading
     std::ifstream file(filePath, std::ios::binary);
@@ -566,59 +513,47 @@ int DL_main(dl::Args& args)
         return 1;
     }
     
-    // Commented out: Set up scene observer
-    //Observer observer;
-    //sceneWrite.subscribe(&observer);
+    oom::bella::defaultScene2025(belScene); // create the basic scene elements in Bella
 
-    // Commented out: Print the VOX version
-    //std::cout << "VOX Version: " << header.version << std::endl;
+    auto voxel          = belScene.createNode("box","box1","box1");
+
+    // Configure voxel box dimensions
+    voxel["radius"]           = 0.33f;
+    voxel["sizeX"]            = 0.99f;
+    voxel["sizeY"]            = 0.99f;
+    voxel["sizeZ"]            = 0.99f;
+
+
 
     // Create the basic scene elements in Bella
     // Each line creates a different type of node in the scene
-    auto beautyPass     = sceneWrite.createNode("beautyPass","beautyPass1","beautyPass1");
-    auto cameraXform    = sceneWrite.createNode("xform","cameraXform1","cameraXform1");
-    auto camera         = sceneWrite.createNode("camera","camera1","camera1");
-    auto sensor         = sceneWrite.createNode("sensor","sensor1","sensor1");
-    auto lens           = sceneWrite.createNode("thinLens","thinLens1","thinLens1");
-    auto imageDome      = sceneWrite.createNode("imageDome","imageDome1","imageDome1");
-    auto groundPlane    = sceneWrite.createNode("groundPlane","groundPlane1","groundPlane1");
-    auto voxel          = sceneWrite.createNode("box","box1","box1");
-    auto groundMat      = sceneWrite.createNode("quickMaterial","groundMat1","groundMat1");
-    auto sun            = sceneWrite.createNode("sun","sun1","sun1");
-
-    /* Commented out: Loop to create material nodes
-    for( uint8_t i = 0; ;i++) 
-    {
-        String nodeName = String("voxMat") + String(i); // Create the node name
-        auto dielectric = sceneWrite.createNode("dielectric",nodeName,nodeName);
-        {
-            Scene::EventScope es(sceneWrite);
-            dielectric["ior"] = 1.51f;
-            dielectric["roughness"] = 22.0f;
-            dielectric["depth"] = 44.0f;
-        }
-        if(i==255)
-        {
-            break;
-        }
-    }*/
-
+    /*
+    auto beautyPass     = belScene.createNode("beautyPass","beautyPass1","beautyPass1");
+    auto cameraXform    = belScene.createNode("xform","cameraXform1","cameraXform1");
+    auto camera         = belScene.createNode("camera","camera1","camera1");
+    auto sensor         = belScene.createNode("sensor","sensor1","sensor1");
+    auto lens           = belScene.createNode("thinLens","thinLens1","thinLens1");
+    auto imageDome      = belScene.createNode("imageDome","imageDome1","imageDome1");
+    auto groundPlane    = belScene.createNode("groundPlane","groundPlane1","groundPlane1");
+    auto voxel          = belScene.createNode("box","box1","box1");
+    auto groundMat      = belScene.createNode("quickMaterial","groundMat1","groundMat1");
+    auto sun            = belScene.createNode("sun","sun1","sun1");
+    */
     // Set up the scene with an EventScope 
     // EventScope groups multiple changes together for efficiency
     {
-        bsdk::Scene::EventScope es(sceneWrite);
-        auto settings = sceneWrite.settings(); // Get scene settings
-        auto world = sceneWrite.world();       // Get scene world root
+        dl::bella_sdk::Scene::EventScope es(belScene);
+        /*auto settings = belScene.settings(); // Get scene settings
+        auto world = belScene.world();       // Get scene world root
         
         // Configure camera
-        camera["resolution"]    = dl::Vec2 {1920, 1080};  // Set resolution to 1080p
+        //camera["resolution"]    = dl::Vec2 {400, 400};  // Set resolution to 1080p
         camera["lens"]          = lens;               // Connect camera to lens
         camera["sensor"]        = sensor;             // Connect camera to sensor
         camera.parentTo(cameraXform);                 // Parent camera to its transform
         cameraXform.parentTo(world);                  // Parent camera transform to world
         
-        // Position the camera with a transformation matrix
-        cameraXform["steps"][0]["xform"] = dl::Mat4 {0.525768608156, -0.850627633385, 0, 0, -0.234464751651, -0.144921468924, -0.961261695938, 0, 0.817675761479, 0.505401223947, -0.275637355817, 0, -88.12259018466, -54.468125200218, 50.706001690932, 1};
+        // Camera position will be calculated after processing voxels using zoomExtents
         
         // Configure environment (image-based lighting)
         imageDome["ext"]            = ".jpg";
@@ -630,11 +565,6 @@ int DL_main(dl::Args& args)
         groundPlane["elevation"]    = -.5f;
         groundPlane["material"]     = groundMat;
         
-        /* Commented out: Sun configuration
-        sun["size"]    = 20.0f;
-        sun["month"]    = "july";
-        sun["rotation"]    = 50.0f;*/
-
         // Configure materials
         groundMat["type"] = "metal";
         groundMat["roughness"] = 22.0f;
@@ -650,16 +580,16 @@ int DL_main(dl::Args& args)
         settings["camera"]      = camera;
         settings["environment"] = imageDome;
         settings["iprScale"]    = 100.0f;
-        settings["threads"]     = bsdk::Input(0);  // Auto-detect thread count
+        settings["threads"]     = dl::bella_sdk::Input(0);  // Auto-detect thread count
         settings["groundPlane"] = groundPlane;
         settings["iprNavigation"] = "maya";  // Use Maya-like navigation in viewer
-        //settings["sun"] = sun;
+        //settings["sun"] = sun; */
     }
 
     // Process all chunks in the VOX file
     // Loop until we reach the end of the file
     while (file.peek() != EOF) {
-        readChunk(file, palette, voxelPalette, sceneWrite, voxel);
+        readChunk(file, palette, voxelPalette, belScene, voxel, minX, minY, minZ, maxX, maxY, maxZ, hasVoxels);
     } 
 
     // If the file didn't have a palette, create materials using the default palette
@@ -677,9 +607,9 @@ int DL_main(dl::Args& args)
             // Create a unique material name
             dl::String nodeName = dl::String("voxMat") + dl::String(i);
             // Create an Oren-Nayar material (diffuse material model)
-            auto voxMat = sceneWrite.createNode("orenNayar", nodeName, nodeName);
+            auto voxMat = belScene.createNode("orenNayar", nodeName, nodeName);
             {
-                bsdk::Scene::EventScope es(sceneWrite);
+                dl::bella_sdk::Scene::EventScope es(belScene);
                 // Commented out: Alternative material settings
                 //dielectric["ior"] = 1.41f;
                 //dielectric["roughness"] = 40.0f;
@@ -691,18 +621,6 @@ int DL_main(dl::Args& args)
                                               static_cast<double>(b)/255.0,
                                               static_cast<double>(a)/255.0};
             }
-            
-            /* Commented out: Alternative dielectric material creation
-            {
-                Scene::EventScope es(sceneWrite);
-                dielectric["ior"] = 1.41f;
-                dielectric["roughness"] = 40.0f;
-                dielectric["depth"] = 33.0f;
-                dielectric["transmittance"] = Rgba{ static_cast<double>(r)/255.0,
-                                                    static_cast<double>(g)/255.0,
-                                                    static_cast<double>(b)/255.0,
-                                                    static_cast<double>(a)/255.0};
-            }*/
         }
     }
 
@@ -710,9 +628,9 @@ int DL_main(dl::Args& args)
     for (int i = 0; i < voxelPalette.size(); i++) 
     {
         // Find the transform node for this voxel
-        auto xformNode = sceneWrite.findNode(dl::String("voxXform") + dl::String(i));
+        auto xformNode = belScene.findNode(dl::String("voxXform") + dl::String(i));
         // Find the material node for this voxel's color
-        auto matNode = sceneWrite.findNode(dl::String("voxMat") + dl::String(voxelPalette[i]));
+        auto matNode = belScene.findNode(dl::String("voxMat") + dl::String(voxelPalette[i]));
         // Assign the material to the voxel
         xformNode["material"] = matNode;
     }
@@ -720,56 +638,46 @@ int DL_main(dl::Args& args)
     // Close the input file
     file.close();
 
+    // Calculate center and radius for camera positioning
+    if (hasVoxels) {
+        // Calculate the center of the voxel extents
+        double centerX = (minX + maxX) / 2.0;
+        double centerY = (minY + maxY) / 2.0;
+        double centerZ = (minZ + maxZ) / 2.0;
+        dl::Vec3 target{centerX, centerY, centerZ};
+        
+        // Calculate the radius (half the diagonal of the bounding box)
+        double sizeX = maxX - minX + 1;  // +1 because voxels have size
+        double sizeY = maxY - minY + 1;
+        double sizeZ = maxZ - minZ + 1;
+        double radius = sqrt(sizeX*sizeX + sizeY*sizeY + sizeZ*sizeZ) / 2.0;
+        
+        // Use zoomExtents to position the camera
+        //dl::Path cameraPath = cameraXform.path();
+        dl::Mat4 cameraMatrix = dl::bella_sdk::zoomExtents(belScene.cameraPath(), target, radius);
+      
+        auto belCameraPath = belScene.cameraPath(); // Since camera can be instanced, we get the full path of th one currently define din scene settings
+
+        auto belCamera = belScene.camera();
+        auto belCameraXform = belCameraPath.parent(); // thus the parent of the camera path is the xform node 99% of the time   
+
+        // Apply the calculated camera transformation
+        {
+            dl::bella_sdk::Scene::EventScope es(belScene);
+            belCameraXform["steps"][0]["xform"] = cameraMatrix;
+        }
+        
+        std::cout << "Voxel extents: (" << static_cast<int>(minX) << "," << static_cast<int>(minY) << "," << static_cast<int>(minZ) 
+                  << ") to (" << static_cast<int>(maxX) << "," << static_cast<int>(maxY) << "," << static_cast<int>(maxZ) << ")" << std::endl;
+        std::cout << "Center: (" << centerX << "," << centerY << "," << centerZ << "), Radius: " << radius << std::endl;
+    }
+
     // Create the output file path by replacing .vox with .bsz
     std::filesystem::path bszPath = voxPath.stem().string() + ".bsz";
-    // Write the Bella cene to the output file
-    sceneWrite.write(dl::String(bszPath.string().c_str()));
+    // Write the Bella scene to the output file
+    belScene.write(dl::String(bszPath.string().c_str()));
 
     // Return success
     return 0;
 }
 
-// Function that returns the license text for this program
-std::string initializeGlobalLicense() 
-{
-    // R"(...)" is a C++ raw string literal - allows multi-line strings with preserved formatting
-    return R"(
-vox2bella
-
-Copyright (c) 2025 Harvey Fong
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.)";
-}
-
-// Function that returns third-party license text
-std::string initializeGlobalThirdPartyLicences() 
-{
-    return R"(
-Bella SDK (Software Development Kit)
-
-Copyright Diffuse Logic SCP, all rights reserved.
-
-Permission is hereby granted to any person obtaining a copy of this software
-(the "Software"), to use, copy, publish, distribute, sublicense, and/or sell
-copies of the Software.
-
-THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY. ALL
-IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF MERCHANTABILITY
-ARE HEREBY DISCLAIMED.)"; 
-}
